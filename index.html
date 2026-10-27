@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>長縄跳びカウンター</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* タッチスクロール・誤拡大防止 */
+        body {
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        /* スムースアニメーション */
+        .transition-theme {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-blue-50 font-sans h-screen flex flex-col justify-between overflow-hidden transition-theme" id="app-body">
+
+    <!-- 画面ヘッダー / 最長記録・チーム表示 -->
+    <header class="bg-white/90 backdrop-blur shadow-md p-4 flex flex-col items-center z-10">
+        <!-- チーム切り替えドロップダウン ＆ 新規・履歴切り替え -->
+        <div class="w-full max-w-md flex justify-between items-center mb-2">
+            <!-- チーム選択 -->
+            <div class="relative flex items-center gap-2">
+                <i class="fa-solid font-bold text-lg fa-users text-gray-600"></i>
+                <select id="team-select" onchange="switchTeam(this.value)" class="bg-gray-50 border border-gray-300 text-gray-900 font-bold rounded-lg px-3 py-1.5 pr-8 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer">
+                    <!-- JSで動的生成 -->
+                </select>
+            </div>
+            
+            <!-- ナビゲーションタブボタン -->
+            <div class="flex bg-gray-200 rounded-lg p-1">
+                <button id="tab-counter-btn" onclick="showTab('counter')" class="px-3 py-1 rounded-md text-xs font-bold transition-all bg-white text-gray-800 shadow-sm">
+                    <i class="fa-solid fa-stopwatch mr-1"></i>計測
+                </button>
+                <button id="tab-history-btn" onclick="showTab('history')" class="px-3 py-1 rounded-md text-xs font-bold transition-all text-gray-600">
+                    <i class="fa-solid fa-list-ol mr-1"></i>履歴
+                </button>
+                <button id="tab-teams-btn" onclick="showTab('teams')" class="px-3 py-1 rounded-md text-xs font-bold transition-all text-gray-600">
+                    <i class="fa-solid fa-gear mr-1"></i>チーム
+                </button>
+            </div>
+        </div>
+
+        <!-- チーム最長記録表示 -->
+        <div class="w-full max-w-md bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-xl p-3 shadow-sm flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-trophy text-2xl text-yellow-100 animate-bounce"></i>
+                <span class="text-xs font-bold tracking-wider uppercase">チーム最高記録</span>
+            </div>
+            <div class="text-2xl font-black">
+                <span id="max-count">0</span> <span class="text-sm font-normal">回</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ領域 -->
+    <main class="flex-1 w-full max-w-md mx-auto relative overflow-hidden flex flex-col">
+
+        <!-- 1. カウンター画面 -->
+        <section id="view-counter" class="flex-1 flex flex-col justify-between p-4 h-full">
+            <!-- カウント表示 -->
+            <div class="flex-1 flex flex-col items-center justify-center my-2 bg-white/70 backdrop-blur rounded-3xl shadow-inner border border-white/50 relative">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">現在の連続回数</span>
+                <div id="current-count" class="text-7xl sm:text-8xl font-black tracking-tight text-gray-800 transition-all transform scale-100">
+                    0
+                </div>
+                <!-- -1 ボタン (控えめに左下に配置) -->
+                <button onclick="decrementCount()" class="absolute bottom-4 left-4 w-12 h-12 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-full flex items-center justify-center text-gray-600 shadow-md text-xl transition-all">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+            </div>
+
+            <!-- アクションエリア（丸形の大きな+ボタンを下部中央に、リセットをその右側に配置） -->
+            <div class="flex items-center justify-center gap-4 my-2 relative">
+                <!-- + メインタップボタン（大きな丸形ボタン） -->
+                <button id="btn-count-up" onclick="incrementCount()" class="w-32 h-32 rounded-full shadow-2xl active:scale-90 transition-all text-white flex items-center justify-center border-b-8 active:border-b-0 active:translate-y-2 cursor-pointer select-none">
+                    <i class="fa-solid fa-plus text-6xl"></i>
+                </button>
+
+                <!-- つっかえた / リセット (右側に配置) -->
+                <button onclick="recordAndReset()" class="absolute right-2 w-20 h-20 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white rounded-2xl shadow-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all active:scale-95 border-b-4 border-rose-700 active:border-b-0 active:translate-y-1">
+                    <i class="fa-solid fa-rotate-right text-xl"></i>
+                    <span class="text-center text-[11px] leading-tight">保存&<br>リセット</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 2. 履歴専用画面 -->
+        <section id="view-history" class="hidden flex-1 flex flex-col p-4 overflow-hidden h-full">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left"></i> 記録履歴
+                </h2>
+                <button onclick="clearCurrentTeamHistory()" class="text-xs text-red-500 hover:text-red-700 font-semibold px-2 py-1 bg-red-50 rounded-lg">
+                    全履歴を消去
+                </button>
+            </div>
+            
+            <div id="history-list" class="flex-1 overflow-y-auto space-y-2 pr-1">
+                <!-- JSで動的に追加される履歴アイテム -->
+            </div>
+        </section>
+
+        <!-- 3. チーム管理画面 -->
+        <section id="view-teams" class="hidden flex-1 flex flex-col p-4 overflow-y-auto h-full">
+            <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-users-gear"></i> チーム追加・設定
+            </h2>
+
+            <!-- 新規チーム追加フォーム -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-4">
+                <h3 class="text-sm font-bold text-gray-700 mb-2">新しいチームを追加</h3>
+                <div class="space-y-3">
+                    <input type="text" id="new-team-name" placeholder="チーム名 (例: Aチーム, 3年2組)" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                    
+                    <!-- カラーパレット選択 -->
+                    <div>
+                        <span class="text-xs font-semibold text-gray-500 block mb-1">テーマカラーを選択</span>
+                        <div class="flex gap-3" id="color-picker-container">
+                            <!-- JSで選択可能カラーを生成 -->
+                        </div>
+                    </div>
+
+                    <button onclick="addNewTeam()" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow transition-all">
+                        チームを追加する
+                    </button>
+                </div>
+            </div>
+
+            <!-- 既存チーム一覧 -->
+            <div class="space-y-2">
+                <h3 class="text-sm font-bold text-gray-700 mb-1">登録中チーム一覧</h3>
+                <div id="teams-list" class="space-y-2">
+                    <!-- JSで一覧生成 -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- モーダル（共通ダイアログ） -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-xs w-full shadow-2xl text-center space-y-4">
+            <h3 id="modal-title" class="text-lg font-bold text-gray-800">確認</h3>
+            <p id="modal-text" class="text-sm text-gray-600"></p>
+            <div class="flex gap-2">
+                <button id="modal-cancel-btn" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-xl font-bold text-sm">キャンセル</button>
+                <button id="modal-confirm-btn" class="flex-1 py-2 bg-red-500 text-white rounded-xl font-bold text-sm">実行</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- アプリのJSロジック -->
+    <script>
+        // カラーパレット定義 (Tailwind クラス名 マッピング)
+        const COLOR_THEMES = {
+            blue: { name: 'ブルー', bg: 'bg-blue-500', border: 'border-blue-700', hover: 'hover:bg-blue-600', text: 'text-blue-500', light: 'bg-blue-50' },
+            emerald: { name: 'エメラルド', bg: 'bg-emerald-500', border: 'border-emerald-700', hover: 'hover:bg-emerald-600', text: 'text-emerald-500', light: 'bg-emerald-50' },
+            violet: { name: 'パープル', bg: 'bg-violet-500', border: 'border-violet-700', hover: 'hover:bg-violet-600', text: 'text-violet-500', light: 'bg-violet-50' },
+            amber: { name: 'オレンジ', bg: 'bg-amber-500', border: 'border-amber-700', hover: 'hover:bg-amber-600', text: 'text-amber-500', light: 'bg-amber-50' },
+            rose: { name: 'ローズ', bg: 'bg-rose-500', border: 'border-rose-700', hover: 'hover:bg-rose-600', text: 'text-rose-500', light: 'bg-rose-50' }
+        };
+
+        // デフォルトアプリ状態
+        let state = {
+            currentTeamId: 'default',
+            selectedNewTeamColor: 'blue',
+            teams: [
+                { id: 'default', name: 'チーム A', color: 'blue', currentCount: 0, history: [] }
+            ]
+        };
+
+        // ローカルストレージキー
+        const STORAGE_KEY = 'nawanawa_counter_data_v1';
+
+        // 初期化ロード
+        window.onload = function() {
+            loadState();
+            renderColorPicker();
+            renderTeamSelect();
+            updateAppView();
+        };
+
+        // ローカルストレージからの読み込み
+        function loadState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    state = JSON.parse(saved);
+                } catch(e) {
+                    console.error("Failed to load state", e);
+                }
+            }
+        }
+
+        // ローカルストレージへの保存
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        // 現在のチームオブジェクトを取得
+        function getCurrentTeam() {
+            return state.teams.find(t => t.id === state.currentTeamId) || state.teams[0];
+        }
+
+        // タブ切り替え
+        function showTab(tabName) {
+            ['counter', 'history', 'teams'].forEach(tab => {
+                const viewEl = document.getElementById(`view-${tab}`);
+                const btnEl = document.getElementById(`tab-${tab}-btn`);
+                if (tab === tabName) {
+                    viewEl.classList.remove('hidden');
+                    btnEl.classList.add('bg-white', 'text-gray-800', 'shadow-sm');
+                    btnEl.classList.remove('text-gray-600');
+                } else {
+                    viewEl.classList.add('hidden');
+                    btnEl.classList.remove('bg-white', 'text-gray-800', 'shadow-sm');
+                    btnEl.classList.add('text-gray-600');
+                }
+            });
+
+            if (tabName === 'history') renderHistoryList();
+            if (tabName === 'teams') renderTeamsList();
+        }
+
+        // +1 カウントアップ
+        function incrementCount() {
+            const team = getCurrentTeam();
+            team.currentCount += 1;
+            saveState();
+            updateCountDisplay();
+            
+            // ポップアニメーション
+            const el = document.getElementById('current-count');
+            el.classList.add('scale-125');
+            setTimeout(() => el.classList.remove('scale-125'), 100);
+        }
+
+        // -1 カウントダウン
+        function decrementCount() {
+            const team = getCurrentTeam();
+            if (team.currentCount > 0) {
+                team.currentCount -= 1;
+                saveState();
+                updateCountDisplay();
+            }
+        }
+
+        // 引っかかった！(履歴に挿入して0リセット)
+        function recordAndReset() {
+            const team = getCurrentTeam();
+            if (team.currentCount > 0) {
+                // 最新の履歴として先頭に挿入
+                team.history.unshift({
+                    id: Date.now().toString(),
+                    count: team.currentCount,
+                    timestamp: new Date().toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                });
+                team.currentCount = 0;
+                saveState();
+                updateAppView();
+            }
+        }
+
+        // 表示の最新化
+        function updateAppView() {
+            const team = getCurrentTeam();
+            updateCountDisplay();
+            updateThemeStyles(team.color);
+        }
+
+        function updateCountDisplay() {
+            const team = getCurrentTeam();
+            document.getElementById('current-count').innerText = team.currentCount;
+
+            // 最長記録の算出（現在のカウントと履歴の最大値）
+            const historyMax = team.history.length > 0 ? Math.max(...team.history.map(h => h.count)) : 0;
+            const overallMax = Math.max(historyMax, team.currentCount);
+            document.getElementById('max-count').innerText = overallMax;
+        }
+
+        // テーマカラーの反映
+        function updateThemeStyles(colorKey) {
+            const theme = COLOR_THEMES[colorKey] || COLOR_THEMES.blue;
+            const btnUp = document.getElementById('btn-count-up');
+            const appBody = document.getElementById('app-body');
+
+            // 画面全体(body)の背景色をチームの薄いカラーに変更
+            appBody.className = `${theme.light} font-sans h-screen flex flex-col justify-between overflow-hidden transition-theme`;
+
+            // 丸形ボタン色のクリアと新規設定
+            btnUp.className = `w-32 h-32 rounded-full shadow-2xl active:scale-90 transition-all text-white flex items-center justify-center border-b-8 active:border-b-0 active:translate-y-2 cursor-pointer select-none ${theme.bg} ${theme.border} ${theme.hover}`;
+        }
+
+        // チーム選択切り替え
+        function switchTeam(teamId) {
+            state.currentTeamId = teamId;
+            saveState();
+            renderTeamSelect();
+            updateAppView();
+            renderHistoryList();
+            renderTeamsList();
+        }
+
+        // チーム一覧ドロップダウンのレンダリング
+        function renderTeamSelect() {
+            const selectEl = document.getElementById('team-select');
+            selectEl.innerHTML = '';
+            state.teams.forEach(team => {
+                const opt = document.createElement('option');
+                opt.value = team.id;
+                opt.innerText = team.name;
+                opt.selected = team.id === state.currentTeamId;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        // 履歴一覧のレンダリング
+        function renderHistoryList() {
+            const team = getCurrentTeam();
+            const listEl = document.getElementById('history-list');
+            listEl.innerHTML = '';
+
+            if (team.history.length === 0) {
+                listEl.innerHTML = `
+                    <div class="text-center py-10 text-gray-400">
+                        <i class="fa-solid fa-clipboard-list text-4xl mb-2"></i>
+                        <p class="text-sm">まだ履歴がありません</p>
+                    </div>`;
+                return;
+            }
+
+            // 最長値を取得してハイライト表示判定に使用
+            const maxCount = Math.max(...team.history.map(h => h.count));
+
+            team.history.forEach((item, idx) => {
+                const isMax = item.count === maxCount && maxCount > 0;
+                const row = document.createElement('div');
+                row.className = `p-3 rounded-2xl flex justify-between items-center ${isMax ? 'bg-amber-50/90 border-2 border-amber-300' : 'bg-white/90 border border-gray-100'} shadow-sm backdrop-blur-sm`;
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-gray-400 w-5">#${team.history.length - idx}</span>
+                        <div>
+                            <div class="text-xl font-black ${isMax ? 'text-amber-600' : 'text-gray-800'} flex items-center gap-1">
+                                <span>${item.count}</span> <span class="text-xs font-semibold text-gray-500">回</span>
+                                ${isMax ? '<span class="ml-1 text-[10px] bg-amber-200 text-amber-800 font-bold px-1.5 py-0.5 rounded-full">BEST</span>' : ''}
+                            </div>
+                            <div class="text-[10px] text-gray-400">${item.timestamp}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-1.5">
+                        <!-- 履歴数値調整用 +- ボタン -->
+                        <div class="flex items-center bg-gray-100/80 rounded-xl p-0.5 border border-gray-200">
+                            <button onclick="adjustHistoryItemCount('${item.id}', -1)" class="w-7 h-7 bg-white hover:bg-gray-200 active:bg-gray-300 rounded-lg flex items-center justify-center text-gray-600 shadow-sm text-xs transition-all">
+                                <i class="fa-solid fa-minus"></i>
+                            </button>
+                            <button onclick="adjustHistoryItemCount('${item.id}', 1)" class="w-7 h-7 bg-white hover:bg-gray-200 active:bg-gray-300 rounded-lg flex items-center justify-center text-gray-600 shadow-sm text-xs transition-all ml-1">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 削除ボタン -->
+                        <button onclick="deleteHistoryItem('${item.id}')" class="text-gray-300 hover:text-red-500 p-2 transition-colors">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+        }
+
+        // 履歴のカウント調整 (+1 / -1)
+        function adjustHistoryItemCount(id, delta) {
+            const team = getCurrentTeam();
+            const item = team.history.find(h => h.id === id);
+            if (item) {
+                item.count = Math.max(0, item.count + delta);
+                saveState();
+                renderHistoryList();
+                updateCountDisplay();
+            }
+        }
+
+        // 単一履歴の削除
+        function deleteHistoryItem(id) {
+            const team = getCurrentTeam();
+            team.history = team.history.filter(h => h.id !== id);
+            saveState();
+            renderHistoryList();
+            updateCountDisplay();
+        }
+
+        // 現在チームの全履歴削除
+        function clearCurrentTeamHistory() {
+            const team = getCurrentTeam();
+            if (team.history.length === 0) return;
+
+            showModal('履歴の全削除', `${team.name} のすべての履歴を消去してもよろしいですか？`, () => {
+                team.history = [];
+                saveState();
+                renderHistoryList();
+                updateCountDisplay();
+            });
+        }
+
+        // カラーピッカー作成
+        function renderColorPicker() {
+            const container = document.getElementById('color-picker-container');
+            container.innerHTML = '';
+            Object.keys(COLOR_THEMES).forEach(colorKey => {
+                const theme = COLOR_THEMES[colorKey];
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `w-8 h-8 rounded-full ${theme.bg} border-2 ${state.selectedNewTeamColor === colorKey ? 'ring-2 ring-offset-2 ring-gray-800 border-white' : 'border-transparent'}`;
+                btn.onclick = () => {
+                    state.selectedNewTeamColor = colorKey;
+                    renderColorPicker();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        // 新規チーム作成
+        function addNewTeam() {
+            const input = document.getElementById('new-team-name');
+            const name = input.value.trim();
+            if (!name) return;
+
+            const newTeam = {
+                id: 'team_' + Date.now(),
+                name: name,
+                color: state.selectedNewTeamColor,
+                currentCount: 0,
+                history: []
+            };
+
+            state.teams.push(newTeam);
+            state.currentTeamId = newTeam.id;
+            input.value = '';
+            
+            saveState();
+            renderTeamSelect();
+            renderTeamsList();
+            updateAppView();
+            showTab('counter');
+        }
+
+        // チーム一覧のレンダリング
+        function renderTeamsList() {
+            const listEl = document.getElementById('teams-list');
+            listEl.innerHTML = '';
+
+            state.teams.forEach(team => {
+                const theme = COLOR_THEMES[team.color] || COLOR_THEMES.blue;
+                const isCurrent = team.id === state.currentTeamId;
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-xl bg-white border ${isCurrent ? 'border-2 border-gray-800 shadow-md' : 'border-gray-200 shadow-sm'} flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-all`;
+                
+                // カード全体のタップで切り替え（削除ボタンなどの操作時はバブリング停止）
+                card.onclick = (e) => {
+                    switchTeam(team.id);
+                };
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-4 h-4 rounded-full ${theme.bg}"></div>
+                        <div>
+                            <span class="font-bold text-gray-800 text-sm">${team.name}</span>
+                            ${isCurrent ? '<span class="ml-2 text-xs bg-gray-800 text-white px-2 py-0.5 rounded-md font-semibold">選択中</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                        ${state.teams.length > 1 ? `<button onclick="deleteTeam('${team.id}')" class="text-gray-300 hover:text-red-500 p-1.5"><i class="fa-solid fa-trash-can text-sm"></i></button>` : ''}
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        // チーム削除
+        function deleteTeam(teamId) {
+            if (state.teams.length <= 1) return;
+            const targetTeam = state.teams.find(t => t.id === teamId);
+
+            showModal('チームの削除', `「${targetTeam.name}」を削除してもよろしいですか？（履歴も消去されます）`, () => {
+                state.teams = state.teams.filter(t => t.id !== teamId);
+                if (state.currentTeamId === teamId) {
+                    state.currentTeamId = state.teams[0].id;
+                }
+                saveState();
+                renderTeamSelect();
+                renderTeamsList();
+                updateAppView();
+            });
+        }
+
+        // カスタム確認モーダル表示
+        function showModal(title, text, onConfirm) {
+            const overlay = document.getElementById('modal-overlay');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-text').innerText = text;
+
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+
+            const closeModal = () => overlay.classList.add('hidden');
+
+            cancelBtn.onclick = closeModal;
+            confirmBtn.onclick = () => {
+                onConfirm();
+                closeModal();
+            };
+
+            overlay.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
